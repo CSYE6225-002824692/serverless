@@ -87,7 +87,7 @@ public class EmailVerificationFunction implements CloudEventsFunction {
         
         // Generate a unique token for email verification
         String verificationToken = generateVerificationTokenWithExpiry(2);
-        String verificationLink = "http://csyewebapp.me:8080/verifyEmail?token=" + verificationToken;
+        String verificationLink = "https://csyewebapp.me/verifyEmail?token=" + verificationToken;
         String emailTemplateHtml = fetchEmailTemplateFromGCS(GCS_BUCKET_NAME, EMAIL_TEMPLATE_FILENAME);
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, properties)) {
