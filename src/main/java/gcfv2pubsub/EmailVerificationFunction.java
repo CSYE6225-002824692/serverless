@@ -80,29 +80,35 @@ public class EmailVerificationFunction implements CloudEventsFunction {
         }
 
         String userEmail = jsonObj.get("email").getAsString();
+
+        Properties properties = new Properties();
+        properties.setProperty("user", DB_USER);
+        properties.setProperty("password", DB_PASS);
         
         // Generate a unique token for email verification
         String verificationToken = generateVerificationTokenWithExpiry(2);
-        String verificationLink = "http://csyewebapp.me/verify?token=" + verificationToken;
-
-        // Before sending the email, fetching the email template content
+        String verificationLink = "http://csyewebapp.me:8080/verifyEmail?token=" + verificationToken;
         String emailTemplateHtml = fetchEmailTemplateFromGCS(GCS_BUCKET_NAME, EMAIL_TEMPLATE_FILENAME);
-        if (emailTemplateHtml == null) {
-            logger.severe("Failed to fetch email template from GCS.");
-            return;
-        }
 
-        sendEmailWithMailgun(userEmail, verificationLink, verificationToken, emailTemplateHtml);
+        try (Connection connection = DriverManager.getConnection(jdbcUrl, properties)) {
+            
+            // Send the email
+            if (sendEmailWithMailgun(userEmail, verificationLink, verificationToken, emailTemplateHtml)) {
+                // If email sent successfully, log the details using the existing connection
+                logEmailDetails(connection, userEmail, verificationLink, verificationToken);
+            }
+        } catch (Exception e) {
+            logger.severe("Failed to establish database connection or log email details: " + e.getMessage());
+        }
         
     }
 
     private String generateVerificationTokenWithExpiry(int validityDurationMinutes) {
         String token = UUID.randomUUID().toString();
-        long expiryEpoch = Instant.now().plusSeconds(60 * validityDurationMinutes).getEpochSecond();
-        return token + ":" + expiryEpoch;
+        return token;
     }
 
-    private void sendEmailWithMailgun(String toEmail, String verificationLink, String verificationToken, String emailTemplateHtml) {
+    private boolean sendEmailWithMailgun(String toEmail, String verificationLink, String verificationToken, String emailTemplateHtml) {
         try {
             URL url = new URL(MAILGUN_API_URL);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -137,28 +143,25 @@ public class EmailVerificationFunction implements CloudEventsFunction {
             int responseCode = connection.getResponseCode();
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 logger.info("Email sent successfully.");
-                logEmailDetails(toEmail, verificationLink, verificationToken);
+                return true;
             } else {
                 logger.severe("Failed to send email. Response code: " + responseCode);
+                return false;
             }
         } catch (Exception e) {
             logger.severe("Failed to send email: " + e.getMessage());
+            return false;
         }
     }
 
-    private void logEmailDetails(String userEmail, String verificationLink, String verificationToken) {
-        // Use the JDBC_URL with the Cloud SQL Connector details
-        Properties properties = new Properties();
-        properties.setProperty("user", DB_USER);
-        properties.setProperty("password", DB_PASS);
-        
-        try (Connection connection = DriverManager.getConnection(jdbcUrl, properties)) {
-            logger.info("JDBC_URL-->"+jdbcUrl);
-            String query = "INSERT INTO emails (email, link, token, sent_time) VALUES (?, ?, ?, NOW())";
+    private void logEmailDetails(Connection connection, String userEmail, String verificationLink, String verificationToken) {
+        try {
+            String query = "INSERT INTO emails (email, link, token, sent_time, expiration_time) " +
+                           "VALUES (?, ?, ?, NOW(), ADDDATE(NOW(), INTERVAL 2 MINUTE))";
             try (PreparedStatement statement = connection.prepareStatement(query)) {
                 statement.setString(1, userEmail);
                 statement.setString(2, verificationLink);
-                statement.setString(3, verificationToken); 
+                statement.setString(3, verificationToken);
                 statement.executeUpdate();
                 logger.info("Logged email details successfully.");
             }
