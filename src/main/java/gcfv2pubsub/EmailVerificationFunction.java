@@ -32,8 +32,8 @@ public class EmailVerificationFunction implements CloudEventsFunction {
     private static final Logger logger = Logger.getLogger(EmailVerificationFunction.class.getName());
     private static final Gson gson = new Gson();
 
-    private static final String MAILGUN_DOMAIN = "csyewebapp.me";
-    private static final String MAILGUN_API_KEY = "6c771365f8c72c6d4e4b647c7aade9f8-309b0ef4-9b9ce17b";
+    private static final String MAILGUN_DOMAIN = System.getenv("MAILGUN_DOMAIN");
+    private static final String MAILGUN_API_KEY = System.getenv("MAILGUN_DOMAIN_API_KEY");
     private static final String MAILGUN_API_URL = "https://api.mailgun.net/v3/" + MAILGUN_DOMAIN + "/messages";
     
 
@@ -42,8 +42,8 @@ public class EmailVerificationFunction implements CloudEventsFunction {
     private static final String DB_USER = System.getenv("DB_USERNAME");
     private static final String DB_PASS = System.getenv("DB_PASSWORD");
 
-    private static final String GCS_BUCKET_NAME = "webapp-verify-email-dev-bucket";
-    private static final String EMAIL_TEMPLATE_FILENAME = "email_template.html";
+    private static final String GCS_BUCKET_NAME = System.getenv("GCS_BUCKET_NAME");
+    private static final String EMAIL_TEMPLATE_FILENAME = System.getenv("EMAIL_TEMPLATE_FILENAME");
 
     private static final String jdbcUrl = String.format(
             "jdbc:mysql:///%s?cloudSqlInstance=%s&" +
@@ -87,7 +87,7 @@ public class EmailVerificationFunction implements CloudEventsFunction {
         
         // Generate a unique token for email verification
         String verificationToken = generateVerificationTokenWithExpiry(2);
-        String verificationLink = "https://csyewebapp.me/verifyEmail?token=" + verificationToken;
+        String verificationLink = System.getenv("VERIFICATION_LINK") + verificationToken;
         String emailTemplateHtml = fetchEmailTemplateFromGCS(GCS_BUCKET_NAME, EMAIL_TEMPLATE_FILENAME);
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, properties)) {
@@ -118,8 +118,8 @@ public class EmailVerificationFunction implements CloudEventsFunction {
             connection.setDoOutput(true);
 
             // Specify the 'From' name and email address
-            String fromName = "CSYEwebapp"; 
-            String fromEmail = "noreply@csyewebapp.me"; 
+            String fromName = System.getenv("FROM_NAME"); 
+            String fromEmail = System.getenv("FROM_EMAIL"); 
             String fromHeaderValue = fromName + " <" + fromEmail + ">";
             String htmlContent = emailTemplateHtml.replace("{{VERIFICATION_LINK}}", verificationLink);
 
